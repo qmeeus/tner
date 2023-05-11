@@ -27,7 +27,7 @@ def main():
     pprint(test_result)
     pprint('----------')
     while True:
-        _inp = input('input sentence >>>')
+        _inp = input('input sentence >>> ')
         if _inp == 'q':
             break
         elif _inp == '':
