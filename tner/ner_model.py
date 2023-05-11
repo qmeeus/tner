@@ -1,6 +1,7 @@
 """ Transformer NER model """
 import json
 import logging
+import math
 import os
 from typing import List, Dict
 from tqdm import tqdm
@@ -274,6 +275,7 @@ class TransformersNER:
                     ind += 1
             label_list = [[self.id2label[__l] for __l in _l] for _l in label_list]
             pred_list = [[self.id2label[__p] for __p in _p] for _p in pred_list]
+            nll_list = [-sum(map(math.log, _probs)) for _probs in prob_list]
             if cache_file_prediction is not None:
                 os.makedirs(os.path.dirname(cache_file_prediction), exist_ok=True)
                 with open(cache_file_prediction, 'w') as f:
@@ -282,6 +284,7 @@ class TransformersNER:
 
         output = {'prediction': pred_list,
                   'probability': prob_list,
+                  'nll': nll_list,
                   'input': inputs_list,
                   'entity_prediction': [decode_ner_tags(_p, _i, _prob) for _p, _prob, _i in
                                         zip(pred_list, prob_list, inputs_list)]}
