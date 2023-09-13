@@ -14,7 +14,7 @@ from allennlp_light.modules import ConditionalRandomField
 from allennlp_light.modules.conditional_random_field.conditional_random_field import allowed_transitions
 
 from .get_dataset import get_dataset
-from .util import pickle_save, pickle_load, span_f1, decode_ner_tags, Dataset, load_hf
+from .util import pickle_save, pickle_load, span_f1, decode_ner_tags, Dataset, load_hf, compute_nll
 from .ner_tokenizer import NERTokenizer
 
 
@@ -182,7 +182,7 @@ class TransformersNER:
                 separator=separator
             )
             # remove overflow text
-            logging.info(f'encode all the data: {len(out)}')
+            # logging.info(f'encode all the data: {len(out)}')
 
             # cache the encoded data
             if cache_file_feature is not None:
@@ -200,7 +200,8 @@ class TransformersNER:
                 cache_file_feature: str = None,
                 cache_file_prediction: str = None,
                 max_length: int = None,
-                separator: str = ' '):
+                separator: str = ' ',
+                progress_bar=True):
         """ get model prediction
 
         @param inputs: a list of tokenized sentences ([["I", "live",...], ["You", "live", ...]])
@@ -247,35 +248,34 @@ class TransformersNER:
             ind = 0
 
             inputs_list = []
-            for i in tqdm(loader):
+            iterator = loader if progress_bar is False else tqdm(loader)
+            for i in iterator:
                 label = i.pop('labels').cpu().tolist()
                 pred, prob = self.encode_to_prediction(i)
                 assert len(label) == len(pred) == len(prob), str([len(label), len(pred), len(prob)])
                 input_ids = i.pop('input_ids').cpu().tolist()
                 for _i, _p, _prob, _l in zip(input_ids, pred, prob, label):
                     assert len(_i) == len(_p) == len(_l)
-                    tmp = [(__p, __l, __prob) for __p, __l, __prob in zip(_p, _l, _prob) if __l != PAD_TOKEN_LABEL_ID]
-                    tmp_pred = list(list(zip(*tmp))[0])
-                    tmp_label = list(list(zip(*tmp))[1])
-                    tmp_prob = list(list(zip(*tmp))[2])
-                    if len(tmp_label) != len(labels[ind]):
-                        if len(tmp_label) < len(labels[ind]):
+                    _pred, _label, _prob = map(list, zip(*filter(lambda t: t[1] != PAD_TOKEN_LABEL_ID, zip(_p, _l, _prob))))
+
+                    if len(_label) != len(labels[ind]):
+                        if len(_label) < len(labels[ind]):
                             logging.debug('found sequence possibly more than max_length')
-                            logging.debug(f'{ind}: \n\t - model loader: {tmp_label}\n\t - label: {labels[ind]}')
-                            tmp_pred = tmp_pred + [self.label2id[self.non_entity_symbol]] * (len(labels[ind]) - len(tmp_label))
-                            tmp_prob = tmp_prob + [0.0] * (len(labels[ind]) - len(tmp_label))
+                            logging.debug(f'{ind}: \n\t - model loader: {_label}\n\t - label: {labels[ind]}')
+                            _pred = _pred + [self.label2id[self.non_entity_symbol]] * (len(labels[ind]) - len(_label))
+                            _prob = _prob + [0.0] * (len(labels[ind]) - len(_label))
                         else:
-                            raise ValueError(f'{ind}: \n\t - model loader: {tmp_label}\n\t - label: {labels[ind]}')
-                    assert len(tmp_pred) == len(labels[ind])
-                    assert len(inputs[ind]) == len(tmp_pred)
-                    pred_list.append(tmp_pred)
+                            raise ValueError(f'{ind}: \n\t - model loader: {_label}\n\t - label: {labels[ind]}')
+                    assert len(_pred) == len(labels[ind])
+                    assert len(inputs[ind]) == len(_pred)
+                    pred_list.append(_pred)
                     label_list.append(labels[ind])
                     inputs_list.append(inputs[ind])
-                    prob_list.append(tmp_prob)
+                    prob_list.append(_prob)
                     ind += 1
             label_list = [[self.id2label[__l] for __l in _l] for _l in label_list]
             pred_list = [[self.id2label[__p] for __p in _p] for _p in pred_list]
-            nll_list = [-sum(map(math.log, _probs)) for _probs in prob_list]
+            nll_list = [compute_nll(_probs) for _probs in prob_list]
             if cache_file_prediction is not None:
                 os.makedirs(os.path.dirname(cache_file_prediction), exist_ok=True)
                 with open(cache_file_prediction, 'w') as f:
