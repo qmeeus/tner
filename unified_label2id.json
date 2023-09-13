@@ -33,14 +33,14 @@
     "relationship": ["Relationship"],
     "character_name": ["Character_Name"],
     "quote": ["Quote"],
-    "cardinal_number": ["CARDINAL"],
-    "ordinal_number": ["ORDINAL"],
+    "cardinal_number": ["CARDINAL", "CAR"],
+    "ordinal_number": ["ORDINAL", "ORD"],
     "quantity": ["QUANTITY"],
     "law": ["LAW"],
     "geopolitical_area": ["GPE"],
     "work_of_art": ["WORK_OF_ART", "creative-work", "creative_work"],
     "facility": ["FAC"],
-    "language": ["LANGUAGE"],
+    "language": ["LANGUAGE", "lang"],
     "event": ["EVENT"],
     "dna": ["DNA"],
     "protein": ["protein"],
@@ -49,5 +49,6 @@
     "rna": ["RNA"],
     "chemical": ["Chemical"],
     "disease": ["Disease"],
-    "collection":["collection"]
+    "collection":["collection"],
+    "project": ["PROJECT", "DOC", "Document"]
 }

@@ -3,6 +3,7 @@ import pickle
 import json
 import string
 import random
+import regex as re
 from typing import List, Dict
 from tqdm import tqdm
 from itertools import chain
@@ -70,6 +71,26 @@ def get_random_string(length: int = 6, exclude: List = None):
         while tmp in exclude:
             tmp = ''.join(random.choice(string.ascii_lowercase) for _ in range(length))
     return tmp
+
+
+def tokenize_sentence(sentence: str):
+    """ tokenize sentence
+
+    @param sentence: sentence to tokenize
+    @return: a list of tokens
+    """
+    rgx = re.compile(r"""'s|'t|'re|'ve|'m|'ll|'d| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+""")
+    return rgx.findall(sentence)
+
+
+def compute_nll(probs, eps=1e-9):
+    """ compute negative log-likelihood
+
+    @param probs: a list of probabilities
+    @return: negative log-likelihood
+    """
+    probs = np.clip(probs, eps, 1 - eps)
+    return -np.sum(np.log(probs))
 
 
 def span_f1(pred_list: List,
