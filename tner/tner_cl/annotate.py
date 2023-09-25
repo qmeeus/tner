@@ -31,17 +31,33 @@ class Annotation:
     entity: List[str] = field(default_factory=MISSING)
     position: List[int] = field(default_factory=MISSING)
     partial: bool = field(default=False)
+    _color: bool = field(default=True, init=False)
 
     def __post_init__(self):
-        self.type = self.get_type(self.type)
+        self.set_type(self.type)
 
     def __len__(self):
         return len(self.entity)
 
+    @property
+    def boundaries(self):
+        return slice(self.position[0], self.position[-1] + 1)
+
+    @property
+    def text(self):
+        return to_string(self.entity)
+
+    def set_type(self, hint):
+        self.type = self.guess_type(hint)
+
     def display_tags(self):
         color = "bold italic blue" if self.partial else "bold blue"
-        fmt = f"[{color}]{{}}[/{color}]"
+        fmt = f"[{color}]{{}}[/{color}]" if self._color else f"{{}}"
         return fmt.format(f"<{self.type}>"), fmt.format(f"</{self.type}>")
+
+    def toggle_color(self, value: bool):
+        assert type(value) is bool
+        self._color = value
 
     def __str__(self):
         return " {1} {0} {2}".format(to_string(self.entity), *self.display_tags())
@@ -57,7 +73,7 @@ class Annotation:
         return obj
 
     @staticmethod
-    def get_type(type_hint):
+    def guess_type(type_hint):
         transforms = [
             lambda x: x,
             lambda x: x.lower(),
@@ -99,10 +115,10 @@ class EntityPrediction(Annotation):
 class Example:
     id: str
     input: List[str]
-    entity_prediction: List[EntityPrediction]
-    prediction: List[str]
-    probability: List[float]
-    nll: float
+    entity_prediction: Optional[List[EntityPrediction]] = field(default_factory=list)
+    prediction: Optional[List[str]] = field(default_factory=list)
+    probability: Optional[List[float]] = field(default=None)
+    nll: float = field(default=None)
     annotation: Optional[List[Annotation]] = field(default_factory=list)
     translation: Optional[Dict[str,Any]] = field(default_factory=dict)
     _is_annotated: bool = field(default=False, init=False)
@@ -113,7 +129,18 @@ class Example:
         self.annotation = [Annotation(**kwargs) for kwargs in self.annotation]
         self.translation = Example(**self.translation, is_translation=True) if self.translation else None
 
-    def annotate(self, example_id:int, total_examples:int, output_file:TextIO):
+    @property
+    def text(self):
+        return to_string(self.input)
+
+    def toggle_color(self, value:bool):
+        for annot in self.annotation:
+            annot.toggle_color(value)
+
+    def copy(self):
+        return deepcopy(self)
+
+    def annotate(self, example_id:int, total_examples:int, output_file:Optional[TextIO]=None):
         while True:
             try:
                 self.display(example_id, total_examples, preds=not(self._is_annotated))
@@ -123,12 +150,14 @@ class Example:
                 exit_code = self.run_command(input("Enter command: ").strip())
                 if exit_code == 1:
                     logging.info(f"Example {self.id} annotated")
-                    self.save(output_file)
+                    if output_file is not None:
+                        self.save(output_file)
                 if exit_code != 0:
                     return exit_code
             except Exception as e:
                 if isinstance(e, (ValueError, TypeError, KeyError, IndexError)):
                     rprint(f"[red]Error: {e!r}[/red] ")
+                    raise e
                     input("Press enter to continue...")
                     continue
                 raise e
@@ -241,9 +270,9 @@ class Example:
     @staticmethod
     def _parse_index(index_string):
         assert re.match(r"(\d(\,)?)+", index_string)
-        if not index_string.is_digit():
-            return tuple(int(s) - 1 in index_string.split(","))
-        return (int(s) - 1,)
+        if not index_string.isdigit():
+            return tuple(int(i) - 1 for i in index_string.split(","))
+        return (int(index_string) - 1,)
 
     @property
     def has_translation(self):
@@ -330,16 +359,20 @@ class Example:
         entity = [self.input[pos] for pos in positions]
         self.add_annotation(annot1.type, entity, positions)
 
-    def to_json(self):
-        return {
+    def to_json(self, pred=True):
+        data = {
             "id": self.id,
             "input": self.input,
             "annotation": [annot.to_json() for annot in self.annotation],
-            "entity_prediction": [entity.to_json() for entity in self.entity_prediction],
-            "prediction": self.prediction,
-            "probability": self.probability,
-            "nll": self.nll
         }
+        if pred:
+            data.update({
+                "entity_prediction": [entity.to_json() for entity in self.entity_prediction],
+                "prediction": self.prediction,
+                "probability": self.probability,
+                "nll": self.nll
+            })
+        return data
 
     def save(self, output_file:Union[Path,str,TextIO], append=False, **kwargs):
         if isinstance(output_file, (Path, str)):
@@ -350,38 +383,73 @@ class Example:
         print(json.dumps(self.to_json(), **kwargs), file=output_file)
         output_file.flush()
 
-    def display(self, example_id:Optional[int]=None, total_examples:Optional[int]=None, preds=False):
-        if not self.is_translation:
-            clear()
-        if example_id is not None and total_examples is not None:
-            rprint(
-                f"\nExample {example_id}/{total_examples} {self.id} "
-                f"[red][{self.nll:.3f}][/red] "
-                "\n" + "-" * 80 + "\n"
-            )
-        annots = iter(deepcopy(
-            self.annotation if not preds
-            else self.entity_prediction
-        ))
+    def __str__(self):
+        annots = deepcopy(self.annotation)
+        annots = iter(enumerate(annots, 1))
         annot, next_annot = None, next(annots, None)
         text = ""
         for i in range(len(self.input)):
-            if next_annot and i == next_annot.position[0]:
-                text += f"{next_annot} "
+            if next_annot and i == next_annot[1].position[0]:
+                text += f"{next_annot[1]} "
                 annot, next_annot = next_annot, next(annots, None)
-            elif annot and i in annot.position:
+            elif annot and i in annot[1].position:
                 continue
             else:
                 text += self.input[i]
-        rprint(Panel(text, title="Translation" if self.is_translation else None))
-        rprint("\n")
-        self.display_annotations(preds=preds)
-        if self.has_translation:
-            self.translation.display(preds=True)
+        return text
 
-    def display_annotations(self, preds=False):
+    def display(self, example_id:Optional[int]=None, total_examples:Optional[int]=None, preds=False, selected_ids="all", clear_screen=True):
+        if clear_screen:
+            clear()
+        if not self.is_translation:
+            title = f"{self.id}" \
+                + (f" {example_id}/{total_examples}" if example_id is not None and total_examples is not None else "") \
+                + (f" [red][{self.nll:.3f}][/red]" if self.nll else "")
+        elif self.is_translation:
+            title = "Translation"
+
+        annots = deepcopy(
+            self.annotation if not preds
+            else self.entity_prediction
+        )
+
+        if selected_ids:
+            if selected_ids == "all":
+                selected_ids = list(range(1, len(annots) + 1))
+
+            if isinstance(selected_ids, int):
+                selected_ids = [selected_ids]
+
+            assert type(selected_ids is list)
+            assert all(type(id) is int for id in selected_ids)
+
+        annots = iter(enumerate(annots, 1))
+        annot, next_annot = None, next(annots, None)
+        text = ""
+        for i in range(len(self.input)):
+            if next_annot and i == next_annot[1].position[0]:
+                if next_annot[0] not in selected_ids:
+                    text += f" {next_annot[1].text}"
+                else:
+                    text += f"{next_annot[1]} "
+                annot, next_annot = next_annot, next(annots, None)
+            elif annot and i in annot[1].position:
+                continue
+            else:
+                text += self.input[i]
+        rprint(Panel(text, title=title))
+        rprint("\n")
+
+        self.display_annotations(preds=preds, selected_ids=selected_ids)
+        if self.has_translation:
+            self.translation.display(clear_screen=False, preds=True)
+
+    def display_annotations(self, preds=False, selected_ids=None):
         annotations = self.entity_prediction if preds else self.annotation
+        selected_ids = selected_ids or []
         for i, annot in enumerate(annotations, 1):
+            if i not in selected_ids:
+                continue
             rprint(f"\t[green][{i}] [/green]{annot} [{annot.position[0]}:{annot.position[-1]}]")
         rprint("\n")
 
