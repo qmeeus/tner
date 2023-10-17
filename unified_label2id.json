@@ -50,5 +50,9 @@
     "chemical": ["Chemical"],
     "disease": ["Disease"],
     "collection":["collection"],
-    "project": ["PROJECT", "DOC", "Document"]
+    "project": ["PROJECT", "DOC", "Document"],
+    "when": ["WHEN"],
+    "quant": ["QUANT"],
+    "place": ["PLACE"]
+
 }
