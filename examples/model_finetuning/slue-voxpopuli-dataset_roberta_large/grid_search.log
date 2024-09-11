@@ -1,0 +1,18 @@
+2024-03-06 17:37:25,508 INFO     INITIALIZE GRID SEARCHER: 32 configs to try
+2024-03-06 17:37:25,508 INFO     ## 1st RUN: Configuration 0/32 ##
+2024-03-06 17:37:25,509 INFO     hyperparameters
+2024-03-06 17:37:25,509 INFO     	 * dataset: ['tner/../slue-voxpopuli-dataset']
+2024-03-06 17:37:25,509 INFO     	 * dataset_split: train
+2024-03-06 17:37:25,509 INFO     	 * dataset_name: None
+2024-03-06 17:37:25,509 INFO     	 * local_dataset: None
+2024-03-06 17:37:25,509 INFO     	 * model: roberta-large
+2024-03-06 17:37:25,509 INFO     	 * crf: True
+2024-03-06 17:37:25,509 INFO     	 * max_length: 128
+2024-03-06 17:37:25,509 INFO     	 * epoch: 15
+2024-03-06 17:37:25,509 INFO     	 * batch_size: 64
+2024-03-06 17:37:25,509 INFO     	 * lr: 1e-05
+2024-03-06 17:37:25,509 INFO     	 * random_seed: 42
+2024-03-06 17:37:25,509 INFO     	 * gradient_accumulation_steps: 2
+2024-03-06 17:37:25,509 INFO     	 * weight_decay: None
+2024-03-06 17:37:25,509 INFO     	 * lr_warmup_step_ratio: 0.1
+2024-03-06 17:37:25,509 INFO     	 * max_grad_norm: None

@@ -1,0 +1,1 @@
+{"dataset": ["tner/../slue-voxpopuli-dataset"], "local_dataset": null, "dataset_name": null, "dataset_split": "train", "model": "roberta-large", "batch_size": 64, "epoch": 15, "max_length": 128, "use_auth_token": false}
